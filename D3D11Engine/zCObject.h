@@ -1,7 +1,8 @@
 #pragma once
 #include "zSTRING.h"
+#include "zCClassDef.h"
 
-class zCClassDef;
+
 class zCObject
 {
 public:

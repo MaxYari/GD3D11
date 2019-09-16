@@ -427,6 +427,7 @@ copy "$(OutDir)$(TargetName).pdb" "$(G1_SYSTEM_PATH)\ddraw.pdb"</Command>
     <ClInclude Include="zCArray.h" />
     <ClInclude Include="zCArrayAdapt.h" />
     <ClInclude Include="zCCamera.h" />
+    <ClInclude Include="zCClassDef.h" />
     <ClInclude Include="zCDecal.h" />
     <ClInclude Include="zCInput.h" />
     <ClInclude Include="zCLightmap.h" />

@@ -653,6 +653,9 @@
     </ClInclude>
     <ClInclude Include="GMeshSimple.h" />
     <ClInclude Include="BaseShadowedPointLight.h" />
+    <ClInclude Include="zCClassDef.h">
+      <Filter>ZenGin\Classes</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp" />

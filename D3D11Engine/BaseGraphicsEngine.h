@@ -159,6 +159,9 @@ public:
 	/** Draws the static VOBs */
 	virtual XRESULT DrawVOBs(bool noTextures=false){return XR_SUCCESS;};
 
+	/** Draws PolyStrips (weapon and particle trails) */
+	virtual XRESULT DrawPolyStrips(bool noTextures = false) { return XR_SUCCESS; };
+
 	/** Draws the sky using the GSky-Object */
 	virtual XRESULT DrawSky(){return XR_SUCCESS;};
 

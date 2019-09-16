@@ -193,6 +193,9 @@ public:
 	/** Draws the static VOBs */
 	virtual XRESULT DrawVOBs(bool noTextures=false);
 
+	/** Draws PolyStrips (weapon and particle trails) */
+	XRESULT DrawPolyStrips(bool noTextures = false);
+
 	/** Draws a single VOB */
 	virtual void DrawVobSingle(VobInfo* vob);
 
