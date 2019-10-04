@@ -43,6 +43,7 @@ typedef int (__fastcall* zCBspBaseCheckRayAgainstPolys)(void*, const D3DXVECTOR3
 
 typedef int (__thiscall* zFILEOpen)(void*,zSTRING&, bool);
 typedef void (__thiscall* zCRnd_D3DVid_SetScreenMode)(void*, int);
+typedef void (__thiscall* zCRnd_D3D_DrawPoly)(void*, zCPolygon*);
 typedef int (__thiscall* zCOptionReadInt)(void*,zSTRING const&, char const*, int);
 typedef int (__thiscall* zCOptionReadBool)(void*,zSTRING const&, char const*, int);
 typedef unsigned long (__thiscall* zCOptionReadDWORD)(void*,zSTRING const&, char const*, unsigned long);
@@ -99,6 +100,7 @@ struct HookedFunctionInfo
 	zCMaterialInitValues original_zCMaterialInitValues;
 	zFILEOpen original_zFILEOpen;
 	zCRnd_D3DVid_SetScreenMode original_zCRnd_D3DVid_SetScreenMode;
+	zCRnd_D3D_DrawPoly original_zCRnd_D3D_DrawPoly;
 	zCOptionReadInt original_zCOptionReadInt;
 	zCOptionReadBool original_zCOptionReadBool;
 	zCOptionReadDWORD original_zCOptionReadDWORD;

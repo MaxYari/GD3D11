@@ -26,35 +26,12 @@ struct GothicMemoryLocations
 	struct zCPolyStrip
 	{
 		static const unsigned int Offset_Material = 0x34;
-		static const unsigned int Offset_VertList = 0x38;
-		static const unsigned int Offset_PolyList = 0x3C;
-		static const unsigned int Offset_NumPolys = 0x40;
-		static const unsigned int Offset_NumVerts = 0x44;
-		static const unsigned int Offset_CenterPointList = 0x48;
-		static const unsigned int Offset_AlphaList = 0x4C;
-		static const unsigned int Offset_Width = 0x50;
-		static const unsigned int Offset_ConnectedVob = 0x54;
-		static const unsigned int Offset_Bbox3D = 0x58;//88th byte
-		static const unsigned int Offset_CamAlign = 0x70;//112th byte
-		static const unsigned int Offset_HeightCheck = 0x74;
-		static const unsigned int Offset_EveryFrameUpdate = 0x78;
-		static const unsigned int Offset_HeightBound = 0x7C;
-		static const unsigned int Offset_FirstSeg = 0x80;
-		static const unsigned int Offset_LastSeg = 0x84;
-		static const unsigned int Offset_NumSeg = 0x88;
-		static const unsigned int Offset_VisLastFrac = 0x8C;
-		static const unsigned int Offset_VisFirstFrac = 0x90;
-		static const unsigned int Offset_AlphaFadeSpeed = 0x94;
-		static const unsigned int Offset_NewAlphaFadeSpeed = 0x98;
-		static const unsigned int Offset_NewAlpha = 0x9C;
-		static const unsigned int Offset_LastDirSeg = 0xA0;
-		static const unsigned int Offset_LastDirNormal = 0xA4;
-		static const unsigned int Offset_LocalFOR = 0xA8;
-		
 
 		static const unsigned int SetVisibleSegments = 0x005BDB90;
-		static const unsigned int AlignToCamera = 0x005BE800;
-		static const unsigned int GetClassDef = 0x004CA100;
+		static const unsigned int AlignToCamera = 0x005BE800;		
+		static const unsigned int Render = 0x005BDC70;
+
+		static const unsigned int RenderDrawPolyReturn = 0x005BE190;
 	};
 
 	struct zCThread
@@ -92,6 +69,7 @@ struct GothicMemoryLocations
 	{
 		static const unsigned int VidSetScreenMode = 0x00658BA0;
 		static const unsigned int DrawLineZ = 0x0064DB00;
+		static const unsigned int DrawPoly = 0x0064B260;
 		static const unsigned int Vid_GetGammaCorrection = 0x00659610;
 	};
 

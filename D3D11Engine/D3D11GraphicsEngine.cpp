@@ -1742,10 +1742,12 @@ XRESULT D3D11GraphicsEngine::OnStartWorldRendering()
 	//DrawParticleEffects();
 	Engine::GAPI->DrawParticlesSimple();
 
+#if defined BUILD_GOTHIC_2_6_fix || defined BUILD_GOTHIC_1_08k
 	// Calc weapon/effect trail mesh data
 	Engine::GAPI->CalcPolyStripMeshes();
 	// Draw those
 	DrawPolyStrips();
+#endif
 
 	// Draw debug lines
 	LineRenderer->Flush();	
@@ -1913,8 +1915,6 @@ XRESULT D3D11GraphicsEngine::DrawMeshInfoListAlphablended(const std::vector<std:
 	SetDefaultStates();
 
 	// Setup renderstates
-	// I've changed CM_CULL_BACK to CM_CULL_NONE since i've noticed some flat models being rendered incorrectly (waterfall splashes for ex)
-	// Hopefully this will not screw up something else
 	Engine::GAPI->GetRendererState()->RasterizerState.CullMode = GothicRasterizerStateInfo::CM_CULL_NONE;
 	Engine::GAPI->GetRendererState()->RasterizerState.SetDirty();
 
@@ -3939,132 +3939,126 @@ XRESULT D3D11GraphicsEngine::DrawVOBs(bool noTextures)
 }
 
 XRESULT D3D11GraphicsEngine::DrawPolyStrips(bool noTextures) {
-	std::list<PolyStripInfo> polyStripInfos = Engine::GAPI->GetPolyStripInfos();
+	
+	//DrawMeshInfoListAlphablended was mostly used as an example to write everything below
+	std::map<zCTexture*, PolyStripInfo> polyStripInfos = Engine::GAPI->GetPolyStripInfos();
 	
 	SetDefaultStates();
 
 	// Setup renderstates
 	Engine::GAPI->GetRendererState()->RasterizerState.CullMode = GothicRasterizerStateInfo::CM_CULL_NONE;
-	Engine::GAPI->GetRendererState()->RasterizerState.SetDirty();	
-	
+	Engine::GAPI->GetRendererState()->RasterizerState.SetDirty();		
 
 	D3DXMATRIX view;
 	Engine::GAPI->GetViewMatrix(&view);
-	Engine::GAPI->SetViewTransform(view);
-
-	
-	//Engine::GAPI->SetWorldTransform(wt);
-
+	Engine::GAPI->SetViewTransform(view);	
 
 	//SetActivePixelShader("PS_Simple");
 	SetActivePixelShader("PS_Diffuse");//seems like "PS_Simple" is used anyway thanks to BindShaderForTexture function used below
-	SetActiveVertexShader("VS_Ex");
-
-	
+	SetActiveVertexShader("VS_Ex");	
 
 	//No idea what these do
 	SetupVS_ExMeshDrawCall();
 	SetupVS_ExConstantBuffer();
 
-
 	// Set constant buffer
 	ActivePS->GetConstantBuffer()[0]->UpdateBuffer(&Engine::GAPI->GetRendererState()->GraphicsState);
 	ActivePS->GetConstantBuffer()[0]->BindToPixelShader(0);
+
+	// Not sure what this does, adds some kind of sky tint?
+	GSky* sky = Engine::GAPI->GetSky();
+	ActivePS->GetConstantBuffer()[1]->UpdateBuffer(&sky->GetAtmosphereCB());
+	ActivePS->GetConstantBuffer()[1]->BindToPixelShader(1);
 
 	// Use default material info for now
 	MaterialInfo defInfo;
 	ActivePS->GetConstantBuffer()[2]->UpdateBuffer(&defInfo);
 	ActivePS->GetConstantBuffer()[2]->BindToPixelShader(2);
-
 	
 	
-	for (std::list<PolyStripInfo>::iterator it = polyStripInfos.begin(); it != polyStripInfos.end(); it++) {
-		zCMaterial* mat = it->material;
-		MeshInfo* mi = it->meshInfo;
-		zCVob* vob = it->vob;
-
-		//set world transform matrix////////////////
-		//D3DXMATRIX wt;
-		//D3DXMatrixIdentity(&wt);
-		//Engine::GAPI->SetWorldTransform(wt);
-
-		//GSky* sky = Engine::GAPI->GetSky();
-		//ActivePS->GetConstantBuffer()[1]->UpdateBuffer(&sky->GetAtmosphereCB());
-		//ActivePS->GetConstantBuffer()[1]->BindToPixelShader(1);
-
-		//Setting world transform matrix/////////////
-		D3DXMATRIX id;
-		D3DXMatrixIdentity(&id);
-		//vob->GetWorldMatrix(&id);
-		ActiveVS->GetConstantBuffer()[1]->UpdateBuffer(&id);
-		ActiveVS->GetConstantBuffer()[1]->BindToVertexShader(1);
-
-		//VS_ExConstantBuffer_PerInstance cbi;
-		//vob->GetWorldMatrix(&wt);
-
-		//Engine::GAPI->SetWorldTransform(wt);
-		//cbi.World = wt;
-		//ActiveVS->GetConstantBuffer()[1]->UpdateBuffer(&cbi);
-		//ActiveVS->GetConstantBuffer()[1]->BindToVertexShader(1);
-		/////////////////////////////////////////////
+	for (auto it = polyStripInfos.begin(); it != polyStripInfos.end(); it++) {
 		
-		zCTexture* tx = mat->GetAniTexture();
-		
-		// Check for alphablending on world mesh
-		bool blendAdd = mat->GetAlphaFunc() == zMAT_ALPHA_FUNC_ADD;
-		bool blendBlend = mat->GetAlphaFunc() == zMAT_ALPHA_FUNC_BLEND;
-		
-		
-		if (tx->CacheIn(0.6f) == zRES_CACHED_IN)
-		{
-			MyDirectDrawSurface7* surface = tx->GetSurface();
-			ID3D11ShaderResourceView* srv[3];
+			zCMaterial* mat = it->second.material;
+			zCTexture* tx = mat->GetAniTexture();
+			std::vector<ExVertexStruct> vertices = it->second.vertices;
 
-			BindShaderForTexture(mat->GetAniTexture(), false, mat->GetAlphaFunc());
+			if (!vertices.size()) continue;
 
-			// Get diffuse and normalmap
-			srv[0] = ((D3D11Texture *)surface->GetEngineTexture())->GetShaderResourceView();
-			srv[1] = surface->GetNormalmap() ? ((D3D11Texture *)surface->GetNormalmap())->GetShaderResourceView() : NULL;
-			srv[2] = surface->GetFxMap() ? ((D3D11Texture *)surface->GetFxMap())->GetShaderResourceView() : NULL;
+			//Setting world transform matrix/////////////
+			D3DXMATRIX id;
+			D3DXMatrixIdentity(&id);			
+			ActiveVS->GetConstantBuffer()[1]->UpdateBuffer(&id);
+			ActiveVS->GetConstantBuffer()[1]->BindToVertexShader(1);
+			/////////////////////////////////////////////
 
-			// Bind both
-			Context->PSSetShaderResources(0, 3, srv);
-			
-			
-			
+			// Check for alphablending on world mesh
+			bool blendAdd = mat->GetAlphaFunc() == zMAT_ALPHA_FUNC_ADD;
+			bool blendBlend = mat->GetAlphaFunc() == zMAT_ALPHA_FUNC_BLEND;
 
+			//WhiteTexture->BindToPixelShader(0);
+			//PS_Diffuse->Apply();
 			
-			if ((blendAdd || blendBlend) && !Engine::GAPI->GetRendererState()->BlendState.BlendEnabled)
+			if (tx->CacheIn(0.6f) == zRES_CACHED_IN)
 			{
-				if (blendAdd)
-					Engine::GAPI->GetRendererState()->BlendState.SetAdditiveBlending();
-				else if (blendBlend)
-					Engine::GAPI->GetRendererState()->BlendState.SetAlphaBlending();
+				MyDirectDrawSurface7* surface = tx->GetSurface();
+				ID3D11ShaderResourceView* srv[3];
 
-				Engine::GAPI->GetRendererState()->BlendState.SetDirty();
+				BindShaderForTexture(mat->GetAniTexture(), false, mat->GetAlphaFunc());
 
-				Engine::GAPI->GetRendererState()->DepthState.DepthWriteEnabled = false;
-				Engine::GAPI->GetRendererState()->DepthState.SetDirty();
+				// Get diffuse and normalmap
+				srv[0] = ((D3D11Texture *)surface->GetEngineTexture())->GetShaderResourceView();
+				srv[1] = surface->GetNormalmap() ? ((D3D11Texture *)surface->GetNormalmap())->GetShaderResourceView() : NULL;
+				srv[2] = surface->GetFxMap() ? ((D3D11Texture *)surface->GetFxMap())->GetShaderResourceView() : NULL;
 
-				UpdateRenderStates();
+				// Bind both
+				Context->PSSetShaderResources(0, 3, srv);
+
+				if ((blendAdd || blendBlend) && !Engine::GAPI->GetRendererState()->BlendState.BlendEnabled)
+				{
+					if (blendAdd)
+						Engine::GAPI->GetRendererState()->BlendState.SetAdditiveBlending();
+					else if (blendBlend)
+						Engine::GAPI->GetRendererState()->BlendState.SetAlphaBlending();
+
+					Engine::GAPI->GetRendererState()->BlendState.SetDirty();
+
+					Engine::GAPI->GetRendererState()->DepthState.DepthWriteEnabled = false;
+					Engine::GAPI->GetRendererState()->DepthState.SetDirty();
+
+					UpdateRenderStates();
+				}
+
+				MaterialInfo* info = Engine::GAPI->GetMaterialInfoFrom(tx);
+				if (!info->Constantbuffer)
+					info->UpdateConstantbuffer();
+
+				info->Constantbuffer->BindToPixelShader(2);
 			}
-			
-			MaterialInfo* info = Engine::GAPI->GetMaterialInfoFrom(tx);
-			if (!info->Constantbuffer)
-				info->UpdateConstantbuffer();
+			else {
+				//Don't draw if texture is not yet cached (I have no idea how can I preload it in advance)
+				continue;
+			}
 
-			info->Constantbuffer->BindToPixelShader(2);
-		}
-		
+			//Populate TempVertexBuffer and draw it
+			D3D11_BUFFER_DESC desc;
+			((D3D11VertexBuffer *)TempVertexBuffer)->GetVertexBuffer()->GetDesc(&desc);
 
-		// Draw batch // Should i use some other drawing method maybe, since I don't really have a "batch"?
-		DrawInstanced(mi->MeshVertexBuffer, mi->MeshIndexBuffer, mi->Indices.size(), DynamicInstancingBuffer, sizeof(VobInstanceInfo), 1, sizeof(ExVertexStruct), 0);
+			if (desc.ByteWidth < sizeof(ExVertexStruct) * vertices.size())
+			{
+				LogInfo() << "(PolyStrip) TempVertexBuffer too small (" << desc.ByteWidth << "), need " << sizeof(ExVertexStruct) * vertices.size() << " bytes. Recreating buffer.";
+
+				// Buffer too small, recreate it
+				delete TempVertexBuffer;
+				TempVertexBuffer = new D3D11VertexBuffer();
+				// Reinit with a bit of a margin, so it will not be reinit each time new vertex is added
+				TempVertexBuffer->Init(NULL, sizeof(ExVertexStruct) * vertices.size() * 1.1, D3D11VertexBuffer::B_VERTEXBUFFER, D3D11VertexBuffer::U_DYNAMIC, D3D11VertexBuffer::CA_WRITE);
+			}
+
+			TempVertexBuffer->UpdateBuffer(&vertices[0], sizeof(ExVertexStruct) * vertices.size());
+
+			DrawVertexBuffer(TempVertexBuffer, vertices.size(), sizeof(ExVertexStruct));
 		
-		
-		
-		
-		
-}
+	}
 	
 	
 	SetDefaultStates();

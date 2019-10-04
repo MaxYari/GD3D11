@@ -913,80 +913,79 @@ void GothicAPI::CalcPolyStripMeshes() {
 	
 	PolyStripInfos.clear();
 
-	for (std::list<zCVob *>::iterator it = PolyStripVobs.begin(); it != PolyStripVobs.end(); it++) {
-		zCVob* vob = *it;
-		zCPolyStrip* pStrip = (zCPolyStrip*)(vob->GetVisual());
+	for (auto it = PolyStripVisuals.begin(); it != PolyStripVisuals.end(); it++) {		
+		zCPolyStrip* pStrip = *it;
 		
 		if (!pStrip) return;
-
-		std::unordered_map<int,PolyStripSegmentInfo>* segmentsInfo = &PolyStripSegmentInfos[pStrip];
 		
-		//Was unalbe to find original starting alpha in instance params. Fade-out easing type used is also unknown.
-		//therefore these params are not precise, they just "feel" right.
-		float startAlpha = 0.35;
-		float fadeSpeedMult = 1.5;
+		//Pointer passed is a placeholder, it'll not be used inside the function.
+		//We need gothic engine to only execute relevant calculations inside native Render()
+		//without actually rendering polygons. Inside Render() polygons are rendered
+		//with zCRnd_D3D::DrawPoly(). Hook created inside zCRndD3D.h prevents native rendering.
+		pStrip->Render(pStrip);
 		//////////////////////////////
-
+		
 		zCPolyStripInstance pStripInst = pStrip->GetInstanceData();
-
-		if (pStripInst.camAlign == 1) pStrip->AlighToCamera();
+		zCMaterial* mat = pStripInst.material;
+		zCTexture* tx = mat->GetAniTexture();
 		
 		//These values go back to 0 after reaching maxSegAmount
 		int firstSeg = pStripInst.firstSeg;
 		int lastSeg = pStripInst.lastSeg;
 		int maxSegAmount = pStripInst.numVert / 2;
 
-		int newFirstSeg = firstSeg;
-
 		float* alphaList = pStripInst.alphaList;
 		zCVertex* vertList = pStripInst.vertList;
-		zCPolygon* poly = &(pStripInst.polyList[0]);		
-		
+		zCPolygon* poly = &(pStripInst.polyList[0]);	
 		
 		std::vector<ExVertexStruct> vertices;
 		std::vector<VERTEX_INDEX> indices;
 		
 		//order of vertex indeces that make up a single poly
 		int vertOrder[4] = { 0, 1, 3, 2 };
-		
 
 		//Loop though segment while allowing segment index to overflow maxSegAmount
 		for (int i = firstSeg; ; i++) {
 			int segIndex = i % maxSegAmount;
+
+			if (segIndex == lastSeg) {
+				//Triangles for the last segment are created during previous iteration, so break here.
+				break;
+			}
+
 			std::vector<ExVertexStruct> polyFan;
 
+#ifdef BUILD_GOTHIC_1_08k
+			//For G1 vertices are taken from polygons in polyList
+			poly = &pStripInst.polyList[segIndex];
+			zCVertex** polyVertices = poly->getVertices();
+
+			for (int n = 0; n < 4; n++) {
+				ExVertexStruct vert;
+
+				vert.Position = polyVertices[n]->Position;
+				vert.TexCoord = poly->getFeatures()[n]->texCoord;
+				vert.Normal = poly->getFeatures()[n]->normal;
+				vert.Color = poly->getFeatures()[n]->lightStatic;
+
+				polyFan.push_back(vert);
+			}
+
 			
-			//Animating segments fade out////
-			if (segmentsInfo->find(segIndex) == segmentsInfo->end()) {
-				segmentsInfo->operator[](segIndex).createdAt = std::chrono::steady_clock::now();
-			}
-
-			auto now = std::chrono::steady_clock::now();
-			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - segmentsInfo->operator[](segIndex).createdAt);
-			unsigned int ms = elapsed.count();
-
-			float alphaFrac = startAlpha - (pStripInst.alphaFadeSpeed*fadeSpeedMult*(ms / 1000.0)); //think in original it's not a linear fade-out
-			if (alphaFrac <= 0) {
-				alphaFrac = 0;
-				//Make faded-out segment a first one in polyStrip, previous segments will be cleaned up.
-				newFirstSeg = segIndex; 				
-			}
-			/////////////////////////////////
-			
-
-			if (segIndex == lastSeg) {	
-				//Triangles for the last segment are created during previous iteration, so break here.
-				break; 
-			}
-
+#endif
+#ifdef BUILD_GOTHIC_2_6_fix
+			//For G2 polyList only contains a single polygon (supposed to be kind of a reference it seems) 
+			//and vertices should be taken from vertList, while preserving a correct order making up a
+			//properly winded polygon
 			for (int n = 0; n < 4; n++) {	
-				//In similar fashion to segment index - vertex index should overflow numVert
-				int vInd = (segIndex * 2 + vertOrder[n]) % pStripInst.numVert; 				
+				//In similar fashion to segment index - vertex index should overflow numVert.
+				int vInd = (segIndex * 2 + vertOrder[n]) % pStripInst.numVert;
+				//Segment index of the current vertex (it's not always equals `i` since we loop through next segment's vertices as well).
+				int vSegInd = ((segIndex * 2 + vertOrder[n]) / 2) % maxSegAmount;
 
 				ExVertexStruct vert;
 				
 				vert.Position = vertList[vInd].Position;				
-				
 				//Vertex features are hooked up from reference polygon's vertices
 				vert.TexCoord = poly->getFeatures()[n]->texCoord;
 				vert.Normal = poly->getFeatures()[n]->normal;
@@ -995,81 +994,22 @@ void GothicAPI::CalcPolyStripMeshes() {
 				//Applying current segment alpha values//				
 				uint8_t color[4];
 				memcpy(&color, &vert.Color, 4);
-				color[3] = 255 * alphaFrac;
-				memcpy(&vert.Color, &color, 4);				
+				float alpha = alphaList[vSegInd];
+				if (alpha < 0) alpha = 0;
+				color[3] = alpha;
+				memcpy(&vert.Color, &color, 4);
 				/////////////////////////////////////////
 				polyFan.push_back(vert);
 			}
+#endif
+
 			if (!polyFan.empty()) {
 				//Convert list of quads to list of triangles
-				WorldConverter::TriangleFanToList(&polyFan[0], polyFan.size(), &vertices);
+				WorldConverter::TriangleFanToList(&polyFan[0], polyFan.size(), &PolyStripInfos[tx].vertices);
+				PolyStripInfos[tx].material = mat;
 			}			
-		}		
+		}
 		
-		if (!vertices.size()) continue;
-		
-		//building naive unoptimized index array based on vertices		
-		for (int i = 0; i < vertices.size(); i++)
-		{
-			indices.push_back(i);
-		}			
-
-		MeshInfo* mi = new MeshInfo;
-
-		mi->Vertices = vertices;
-		mi->Indices = indices;
-
-		// Create the buffers
-		Engine::GraphicsEngine->CreateVertexBuffer(&mi->MeshVertexBuffer);
-		Engine::GraphicsEngine->CreateVertexBuffer(&mi->MeshIndexBuffer);
-
-		// Generate normals
-		WorldConverter::GenerateVertexNormals(mi->Vertices, mi->Indices);
-
-		// Optimize faces and vertices (No idea what this does tbh)
-		mi->MeshVertexBuffer->OptimizeFaces(&mi->Indices[0],
-			(byte *)&mi->Vertices[0],
-			mi->Indices.size(),
-			mi->Vertices.size(),
-			sizeof(ExVertexStruct));
-		
-		mi->MeshVertexBuffer->OptimizeVertices(&mi->Indices[0],
-			(byte *)&mi->Vertices[0],
-			mi->Indices.size(),
-			mi->Vertices.size(),
-			sizeof(ExVertexStruct));
-		
-		
-		// Init and fill buffers
-		mi->MeshVertexBuffer->Init(&mi->Vertices[0], mi->Vertices.size() * sizeof(ExVertexStruct), D3D11VertexBuffer::B_VERTEXBUFFER, D3D11VertexBuffer::U_IMMUTABLE);
-		mi->MeshIndexBuffer->Init(&mi->Indices[0], mi->Indices.size() * sizeof(VERTEX_INDEX), D3D11VertexBuffer::B_INDEXBUFFER, D3D11VertexBuffer::U_IMMUTABLE);
-		
-		zCMaterial* mat = pStrip->GetMaterial();	
-		
-		PolyStripInfo polyStripInfo;
-		polyStripInfo.material = mat;
-		polyStripInfo.meshInfo = mi;
-		polyStripInfo.vob = vob;
-
-		PolyStripInfos.push_back(polyStripInfo);
-
-		//Define visible segments range using newFirstSeg set above based on segments alpha. 
-		//Gothic engine cleans up (reuses) all the segments not in visible range.
-		//It seems that first segment fraction should always be a tad smaller than lastSeg fraction
-		//even if it's the same segment index, hence +.001 is used. Otherwise if you are attempting to
-		//set first and last segment to the same index (i.e when all segments disappeared) engine will, for some reason,
-		//assume that you actually want to set all segments to be visible.		
-		if (newFirstSeg != firstSeg) {			
-			pStrip->SetVisibleSegments(newFirstSeg / (maxSegAmount + .001), lastSeg / float(maxSegAmount));
-			//cleanup segment infos which are not in range
-			for (int i = lastSeg + 1; ; i++) {				
-				int segIndex = i % maxSegAmount;
-				int firstSeg = (newFirstSeg + maxSegAmount - 1) % maxSegAmount;				
-				if (segIndex == firstSeg) break;
-				segmentsInfo->erase(segIndex);
-			}
-			
-		}	
 	}
 };
 
@@ -1264,10 +1204,9 @@ void GothicAPI::OnVisualDeleted(zCVisual* visual)
 
 	// This is a poly strip vob
 	if (strcmp(className, "zCPolyStrip") == 0) {
-		for (std::list<zCVob*>::iterator it = PolyStripVobs.begin(); it != PolyStripVobs.end(); it++) {
-			if ((*it)->GetVisual() == visual) {
-				PolyStripVobs.remove(*it);
-				PolyStripSegmentInfos.erase((zCPolyStrip*)visual);
+		for (auto it = PolyStripVisuals.begin(); it != PolyStripVisuals.end(); it++) {
+			if (*it == (zCPolyStrip*)visual) {
+				PolyStripVisuals.erase(*it);				
 			}
 		}
 	}
@@ -1427,8 +1366,7 @@ void GothicAPI::OnRemovedVob(zCVob* vob, zCWorld* world)
 		zCClassDef* classDef = ((zCObject*)(visual))->_GetClassDef();
 		const char* className = classDef->className.ToChar();
 		if (strcmp(className, "zCPolyStrip") == 0) {
-			PolyStripVobs.remove(vob); //remove it if it exists in polystrips array	
-			PolyStripSegmentInfos.erase((zCPolyStrip*)visual);
+			PolyStripVisuals.erase((zCPolyStrip*)visual); //remove it if it exists in polystrips array				
 		}
 	}
 	
@@ -1733,7 +1671,7 @@ void GothicAPI::OnAddVob(zCVob* vob, zCWorld* world)
 
 	//This is a poly strip vob
 	if (strcmp(className, "zCPolyStrip") == 0) {
-		PolyStripVobs.push_back(vob);
+		PolyStripVisuals.insert((zCPolyStrip *)(vob->GetVisual()));
 	}
 
 	for(unsigned int i=0; i<extv.size();i++)
@@ -1852,7 +1790,8 @@ void GothicAPI::OnAddVob(zCVob* vob, zCWorld* world)
 			//if(!BspLeafVobLists.empty())
 			//	return; // FIXME: Don't add particle effects after the loading time, since some effects (like landing from a jump?) will crash the game!
 
-			ParticleEffectVobs.push_back(vob);
+			ParticleEffectVobs.push_back(vob);		
+			
 
 			//tempParticleNames[vob] = ((zCParticleFX *)vob->GetVisual())->GetEmitter()->particleFXName.ToChar() + std::string(" | ") + ((zCParticleFX *)vob->GetVisual())->GetEmitter()->visName_S.ToChar();
 			break;
@@ -2360,6 +2299,10 @@ void GothicAPI::DrawParticleFX(zCVob* source, zCParticleFX* fx, ParticleFrameDat
 				}
 				break;
 			}
+
+			if (p->PolyStrip) {
+				PolyStripVisuals.insert(p->PolyStrip);
+			};
 
 			// Only render every renderNumMods particle
 			/*if((i % renderNumMod) != 0)
