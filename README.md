@@ -1,10 +1,4 @@
 # GD3D11
-
-With this mod for the games "Gothic" and "Gothic 2", I want to bring the engine of those games into a more modern state. Through an own implementation of the DirectDraw-API and using hooking and assemblercode-modifications of gothics intern engine calls, I have managed to completely replace gothics old rendering architecture with a new one, which is able to utilize more of the current GPU generations power for rendering.
-Since Gothic's engine in its original state tries to cull as much as possible, this takes a lot of work from the CPU, which was slowing down the game even on todays processors. While the original renderer did a really great job with the tech from 2002, GPUs have grown much faster.
-
-And now, that they can actually use their power to render, we not only get a big performance boost on most systems, but also more features.
-
 ## New in this fork
 
 Weapon, projectile and spell trails were implemented (zCPolyStrips).
@@ -15,6 +9,13 @@ Weapon, projectile and spell trails were implemented (zCPolyStrips).
 </p>
 
 Fixed visibility of some "flat" meshes (e.g waterfall splashes) which were previously invisible from the back side.
+
+## Original readme
+
+With this mod for the games "Gothic" and "Gothic 2", I want to bring the engine of those games into a more modern state. Through an own implementation of the DirectDraw-API and using hooking and assemblercode-modifications of gothics intern engine calls, I have managed to completely replace gothics old rendering architecture with a new one, which is able to utilize more of the current GPU generations power for rendering.
+Since Gothic's engine in its original state tries to cull as much as possible, this takes a lot of work from the CPU, which was slowing down the game even on todays processors. While the original renderer did a really great job with the tech from 2002, GPUs have grown much faster.
+
+And now, that they can actually use their power to render, we not only get a big performance boost on most systems, but also more features.
 
 ## Bugs & Problems
 
